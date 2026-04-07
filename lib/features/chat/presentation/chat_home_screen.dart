@@ -115,6 +115,12 @@ class _GreetingState extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: () => context.push('/login'),
+              icon: const Icon(Icons.login_rounded),
+              label: const Text('Login to Gemini'),
+            ),
           ],
         ),
       ),
@@ -500,16 +506,33 @@ class _ChatDrawerState extends ConsumerState<_ChatDrawer> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-              child: ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                leading: const Icon(Icons.tune_rounded),
-                title: const Text('Settings'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  context.push('/settings');
-                },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    leading: const Icon(Icons.login_rounded),
+                    title: const Text('Gemini login'),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      context.push('/login');
+                    },
+                  ),
+                  const SizedBox(height: 6),
+                  ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    leading: const Icon(Icons.tune_rounded),
+                    title: const Text('Settings'),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      context.push('/settings');
+                    },
+                  ),
+                ],
               ),
             ),
           ],

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../data/repositories/local_settings_repository.dart';
 import '../../chat/application/chat_providers.dart';
@@ -108,6 +110,8 @@ class SettingsScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 16),
+            _SectionCard(title: 'Gemini', children: const [_GeminiLoginTile()]),
+            const SizedBox(height: 16),
             _SectionCard(
               title: 'About',
               children: const [
@@ -159,6 +163,45 @@ class _SectionCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _GeminiLoginTile extends StatelessWidget {
+  const _GeminiLoginTile();
+
+  static const _storage = FlutterSecureStorage();
+
+  Future<bool> _hasLogin() async {
+    final cookies = await _storage.read(key: 'gemini_cookies');
+    final auth = await _storage.read(key: 'gemini_auth');
+    return (cookies?.isNotEmpty ?? false) && (auth?.isNotEmpty ?? false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _hasLogin(),
+      builder: (context, snapshot) {
+        final isConnected = snapshot.data ?? false;
+
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Google AI Studio login'),
+          subtitle: Text(
+            isConnected
+                ? 'Gemini session detected on this device.'
+                : 'Open the login screen to capture the Gemini session tokens.',
+          ),
+          trailing: FilledButton.tonalIcon(
+            onPressed: () => context.push('/login'),
+            icon: Icon(
+              isConnected ? Icons.refresh_rounded : Icons.login_rounded,
+            ),
+            label: Text(isConnected ? 'Reconnect' : 'Login'),
+          ),
+        );
+      },
     );
   }
 }
