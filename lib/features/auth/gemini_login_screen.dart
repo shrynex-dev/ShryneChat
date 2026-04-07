@@ -19,6 +19,7 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
   bool _capturedLogin = false;
   bool _cookiesCaptured = false;
   bool _authCaptured = false;
+  bool _bodyTemplateCaptured = false;
   String _status = 'Waiting for Google AI Studio to finish sign-in...';
 
   @override
@@ -34,6 +35,7 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
     await _storage.delete(key: 'gemini_request_headers');
     await _storage.delete(key: 'gemini_request_url');
     await _storage.delete(key: 'gemini_request_body_template');
+    _bodyTemplateCaptured = false;
   }
 
   void _setStatus(String status) {
@@ -80,7 +82,9 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
       _cookiesCaptured = true;
       _setStatus(
         _authCaptured
-            ? 'Cookies captured. Finishing login...'
+            ? _bodyTemplateCaptured
+                  ? 'Cookies captured. Finishing login...'
+                  : 'Cookies captured. Waiting for Gemini request body...'
             : 'Cookies captured. Waiting for Gemini auth headers...',
       );
     }
@@ -109,7 +113,9 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
       _authCaptured = true;
       _setStatus(
         _cookiesCaptured
-            ? 'Auth headers captured. Finishing login...'
+            ? _bodyTemplateCaptured
+                  ? 'Auth headers captured. Finishing login...'
+                  : 'Auth headers captured. Waiting for Gemini request body...'
             : 'Auth headers captured. Waiting for Gemini cookies...',
       );
     }
@@ -127,13 +133,27 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
         return;
       }
       await _storage.write(key: 'gemini_request_body_template', value: encoded);
+      if (!_bodyTemplateCaptured) {
+        _bodyTemplateCaptured = true;
+        _setStatus(
+          _cookiesCaptured && _authCaptured
+              ? 'Request body captured. Finishing login...'
+              : _authCaptured
+              ? 'Request body captured. Waiting for Gemini cookies...'
+              : 'Request body captured. Waiting for Gemini auth headers...',
+        );
+      }
+      await _finishLoginIfReady();
     } catch (_) {
       // Keep login flow resilient if the intercepted body is not JSON-encodable.
     }
   }
 
   Future<void> _finishLoginIfReady() async {
-    if (_capturedLogin || !_cookiesCaptured || !_authCaptured) {
+    if (_capturedLogin ||
+        !_cookiesCaptured ||
+        !_authCaptured ||
+        !_bodyTemplateCaptured) {
       return;
     }
 
@@ -213,7 +233,9 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
                   if (!_capturedLogin && url.toString().contains('/app/')) {
                     _setStatus(
                       _authCaptured
-                          ? 'AI Studio loaded. Waiting for final cookies...'
+                          ? _bodyTemplateCaptured
+                                ? 'AI Studio loaded. Waiting for final cookies...'
+                                : 'AI Studio loaded. Waiting for Gemini request body...'
                           : 'AI Studio loaded. Waiting for Gemini auth request...',
                     );
                   }
