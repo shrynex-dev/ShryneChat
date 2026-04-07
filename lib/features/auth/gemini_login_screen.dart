@@ -11,8 +11,113 @@ class GeminiLoginScreen extends StatefulWidget {
 }
 
 class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
+  static const _storage = FlutterSecureStorage();
+
   double _progress = 0;
   bool _capturedLogin = false;
+  bool _cookiesCaptured = false;
+  bool _authCaptured = false;
+  String _status = 'Waiting for Google AI Studio to finish sign-in...';
+
+  @override
+  void initState() {
+    super.initState();
+    _resetStoredSession();
+  }
+
+  Future<void> _resetStoredSession() async {
+    await _storage.delete(key: 'gemini_cookies');
+    await _storage.delete(key: 'gemini_auth');
+    await _storage.delete(key: 'gemini_visit_id');
+  }
+
+  void _setStatus(String status) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _status = status;
+    });
+  }
+
+  Map<String, String> _normalizeHeaders(Map<dynamic, dynamic>? headers) {
+    if (headers == null) {
+      return const {};
+    }
+    return {
+      for (final entry in headers.entries)
+        entry.key.toString().toLowerCase(): entry.value.toString(),
+    };
+  }
+
+  Future<void> _captureCookies(WebUri? url) async {
+    if (url == null) {
+      return;
+    }
+
+    final cookies = await CookieManager.instance().getCookies(url: url);
+    final cookieString = cookies
+        .where((cookie) => cookie.name.isNotEmpty)
+        .map((cookie) => '${cookie.name}=${cookie.value}')
+        .join('; ');
+
+    if (cookieString.isEmpty) {
+      return;
+    }
+
+    await _storage.write(key: 'gemini_cookies', value: cookieString);
+    if (!_cookiesCaptured) {
+      _cookiesCaptured = true;
+      _setStatus(
+        _authCaptured
+            ? 'Cookies captured. Finishing login...'
+            : 'Cookies captured. Waiting for Gemini auth headers...',
+      );
+    }
+    await _finishLoginIfReady();
+  }
+
+  Future<void> _captureHeaders(Map<dynamic, dynamic>? headers) async {
+    final normalizedHeaders = _normalizeHeaders(headers);
+    final authHeader = normalizedHeaders['authorization'];
+    final visitId = normalizedHeaders['x-aistudio-visit-id'];
+
+    if (authHeader == null || authHeader.isEmpty) {
+      return;
+    }
+
+    await _storage.write(key: 'gemini_auth', value: authHeader);
+    if (visitId != null && visitId.isNotEmpty) {
+      await _storage.write(key: 'gemini_visit_id', value: visitId);
+    }
+
+    if (!_authCaptured) {
+      _authCaptured = true;
+      _setStatus(
+        _cookiesCaptured
+            ? 'Auth headers captured. Finishing login...'
+            : 'Auth headers captured. Waiting for Gemini cookies...',
+      );
+    }
+    await _finishLoginIfReady();
+  }
+
+  Future<void> _finishLoginIfReady() async {
+    if (_capturedLogin || !_cookiesCaptured || !_authCaptured) {
+      return;
+    }
+
+    _capturedLogin = true;
+    _setStatus('Gemini login saved successfully.');
+
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Gemini login saved successfully.')),
+    );
+    context.pop();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,18 +131,33 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Sign in to Google AI Studio, then wait for the app page to finish loading. The session will be saved automatically and this screen will close.',
+                  'Sign in to Google AI Studio. This screen will stay open until both cookies and Gemini auth headers are captured.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 12),
                 LinearProgressIndicator(
                   value: _progress == 1 ? null : _progress,
                 ),
+                const SizedBox(height: 12),
+                Text(
+                  _status,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ],
             ),
           ),
           Expanded(
             child: InAppWebView(
+              initialSettings: InAppWebViewSettings(
+                javaScriptEnabled: true,
+                thirdPartyCookiesEnabled: true,
+                sharedCookiesEnabled: true,
+                useShouldInterceptRequest: true,
+                useShouldInterceptAjaxRequest: true,
+                useShouldInterceptFetchRequest: true,
+              ),
               initialUrlRequest: URLRequest(
                 url: WebUri('https://aistudio.google.com/'),
               ),
@@ -49,57 +169,57 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
                   _progress = progress / 100;
                 });
               },
+              onLoadStart: (controller, url) {
+                if (url != null) {
+                  _setStatus('Loading ${url.host}...');
+                }
+              },
               onLoadStop: (controller, url) async {
                 if (url == null || _capturedLogin) {
                   return;
                 }
-
-                if (url.toString().contains('app/prompts')) {
-                  const storage = FlutterSecureStorage();
-                  final cookieManager = CookieManager.instance();
-                  final cookies = await cookieManager.getCookies(url: url);
-                  final cookieString = cookies
-                      .map((cookie) => '${cookie.name}=${cookie.value}')
-                      .join('; ');
-
-                  if (cookieString.isNotEmpty) {
-                    await storage.write(
-                      key: 'gemini_cookies',
-                      value: cookieString,
+                if (url.host.contains('aistudio.google.com')) {
+                  await _captureCookies(url);
+                  if (!_capturedLogin && url.toString().contains('/app/')) {
+                    _setStatus(
+                      _authCaptured
+                          ? 'AI Studio loaded. Waiting for final cookies...'
+                          : 'AI Studio loaded. Waiting for Gemini auth request...',
                     );
                   }
-
-                  _capturedLogin = true;
-                  if (!context.mounted) {
-                    return;
-                  }
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Gemini login saved successfully.'),
-                    ),
-                  );
-                  context.pop();
+                }
+              },
+              onUpdateVisitedHistory: (controller, url, isReload) async {
+                if (url != null && url.host.contains('aistudio.google.com')) {
+                  await _captureCookies(url);
                 }
               },
               shouldInterceptRequest: (controller, request) async {
                 final url = request.url.toString();
-
-                if (url.contains('GenerateContent')) {
-                  final authHeader = request.headers?['authorization'];
-                  final visitId = request.headers?['x-aistudio-visit-id'];
-
-                  if (authHeader != null && authHeader.isNotEmpty) {
-                    const storage = FlutterSecureStorage();
-                    await storage.write(key: 'gemini_auth', value: authHeader);
-                    if (visitId != null && visitId.isNotEmpty) {
-                      await storage.write(
-                        key: 'gemini_visit_id',
-                        value: visitId,
-                      );
-                    }
-                  }
+                if (url.contains('GenerateContent') ||
+                    url.contains('makersuite') ||
+                    url.contains('alkali')) {
+                  await _captureHeaders(request.headers);
                 }
                 return null;
+              },
+              shouldInterceptAjaxRequest: (controller, ajaxRequest) async {
+                final url = ajaxRequest.url.toString();
+                if (url.contains('GenerateContent') ||
+                    url.contains('makersuite') ||
+                    url.contains('alkali')) {
+                  await _captureHeaders(ajaxRequest.headers?.getHeaders());
+                }
+                return ajaxRequest;
+              },
+              shouldInterceptFetchRequest: (controller, fetchRequest) async {
+                final url = fetchRequest.url.toString();
+                if (url.contains('GenerateContent') ||
+                    url.contains('makersuite') ||
+                    url.contains('alkali')) {
+                  await _captureHeaders(fetchRequest.headers);
+                }
+                return fetchRequest;
               },
             ),
           ),
