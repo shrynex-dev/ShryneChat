@@ -34,50 +34,45 @@ class GeminiClient {
     };
   }
 
-  String? _extractBestText(dynamic value) {
-    final candidates = <String>[];
-
-    void collect(dynamic node) {
-      if (node is String) {
-        final text = node.trim();
-        if (text.isEmpty) {
-          return;
-        }
-        if (text.length == 1 &&
-            RegExp(r'^[a-z]$', caseSensitive: false).hasMatch(text)) {
-          return;
-        }
-        if (text.startsWith('http://') || text.startsWith('https://')) {
-          return;
-        }
-        if (text.startsWith('models/')) {
-          return;
-        }
-        candidates.add(text);
-        return;
-      }
-
-      if (node is List) {
-        for (final item in node) {
-          collect(item);
-        }
-        return;
-      }
-
-      if (node is Map) {
-        for (final item in node.values) {
-          collect(item);
-        }
-      }
-    }
-
-    collect(value);
-    if (candidates.isEmpty) {
+  String? _extractAssistantText(List<dynamic> data) {
+    if (data.isEmpty || data.first is! List) {
       return null;
     }
 
-    candidates.sort((a, b) => b.length.compareTo(a.length));
-    return candidates.first;
+    final turns = data.first as List<dynamic>;
+    final buffer = StringBuffer();
+
+    for (final turn in turns) {
+      if (turn is! List || turn.isEmpty) {
+        continue;
+      }
+
+      final candidate = turn.first;
+      if (candidate is! List || candidate.isEmpty) {
+        continue;
+      }
+
+      final role = _readPath(candidate, const [0, 0, 1]);
+      final text = _readPath(candidate, const [0, 0, 0, 0, 0, 1]);
+
+      if (role == 'model' && text is String && text.isNotEmpty) {
+        buffer.write(text);
+      }
+    }
+
+    final parsed = buffer.toString().trim();
+    return parsed.isEmpty ? null : parsed;
+  }
+
+  dynamic _readPath(dynamic value, List<int> path) {
+    dynamic current = value;
+    for (final index in path) {
+      if (current is! List || index >= current.length) {
+        return null;
+      }
+      current = current[index];
+    }
+    return current;
   }
 
   Future<String> getResponse(
@@ -181,7 +176,7 @@ class GeminiClient {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        final parsedText = _extractBestText(data);
+        final parsedText = _extractAssistantText(data);
         if (parsedText != null) {
           return parsedText;
         }
