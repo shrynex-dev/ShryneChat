@@ -54,6 +54,11 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
     };
   }
 
+  bool _isGenerateContentRequest(String url) {
+    return url.contains('MakerSuiteService/GenerateContent') ||
+        url.contains('GenerateContent');
+  }
+
   Future<void> _captureCookies(WebUri? url) async {
     if (url == null) {
       return;
@@ -204,9 +209,7 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
               },
               shouldInterceptRequest: (controller, request) async {
                 final url = request.url.toString();
-                if (url.contains('GenerateContent') ||
-                    url.contains('makersuite') ||
-                    url.contains('alkali')) {
+                if (_isGenerateContentRequest(url)) {
                   await _storage.write(key: 'gemini_request_url', value: url);
                   await _captureHeaders(request.headers);
                 }
@@ -214,9 +217,7 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
               },
               shouldInterceptAjaxRequest: (controller, ajaxRequest) async {
                 final url = ajaxRequest.url.toString();
-                if (url.contains('GenerateContent') ||
-                    url.contains('makersuite') ||
-                    url.contains('alkali')) {
+                if (_isGenerateContentRequest(url)) {
                   await _storage.write(key: 'gemini_request_url', value: url);
                   await _captureHeaders(ajaxRequest.headers?.getHeaders());
                 }
@@ -224,9 +225,7 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
               },
               shouldInterceptFetchRequest: (controller, fetchRequest) async {
                 final url = fetchRequest.url.toString();
-                if (url.contains('GenerateContent') ||
-                    url.contains('makersuite') ||
-                    url.contains('alkali')) {
+                if (_isGenerateContentRequest(url)) {
                   await _storage.write(key: 'gemini_request_url', value: url);
                   await _captureHeaders(fetchRequest.headers);
                 }
