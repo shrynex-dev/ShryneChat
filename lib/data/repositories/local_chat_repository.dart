@@ -1,4 +1,3 @@
-import 'package:drift/drift.dart';
 import '../api/gemini_client.dart';
 import '../local/app_database.dart';
 import '../models/chat_models.dart';

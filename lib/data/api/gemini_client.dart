@@ -24,7 +24,7 @@ class GeminiClient {
 
     // 3. The exact data package Google expects
     final List<dynamic> payload = [
-      "models/gemini-1.5-flash", 
+      "models/gemini-3-flash-preview", 
       contents,
       [[null, null, 7, 5], [null, null, 8, 5], [null, null, 9, 5], [null, null, 10, 5]],
       [null, null, null, 65536, 1, 0.95, 64, null, null, null, null, null, null, 1, null, null, [1, null, null, 3]],
