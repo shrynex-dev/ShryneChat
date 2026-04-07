@@ -34,6 +34,15 @@ class GeminiClient {
     };
   }
 
+  List<dynamic>? _decodeSavedPayloadTemplate(String? rawPayload) {
+    if (rawPayload == null || rawPayload.isEmpty) {
+      return null;
+    }
+
+    final decoded = jsonDecode(rawPayload);
+    return decoded is List<dynamic> ? decoded : null;
+  }
+
   String? _extractAssistantText(List<dynamic> data) {
     if (data.isEmpty || data.first is! List) {
       return null;
@@ -86,7 +95,11 @@ class GeminiClient {
         "v1_${DateTime.now().millisecondsSinceEpoch}";
     final requestUrl = await _storage.read(key: 'gemini_request_url');
     final rawSavedHeaders = await _storage.read(key: 'gemini_request_headers');
+    final rawPayloadTemplate = await _storage.read(
+      key: 'gemini_request_body_template',
+    );
     final savedHeaders = _decodeSavedHeaders(rawSavedHeaders);
+    final payloadTemplate = _decodeSavedPayloadTemplate(rawPayloadTemplate);
 
     if (cookies == null || auth == null) {
       return "Error: Please login first.";
@@ -110,38 +123,47 @@ class GeminiClient {
       "user",
     ]);
 
-    // 3. The exact data package Google expects
-    final List<dynamic> payload = [
-      "models/gemini-3-flash-preview",
-      contents,
-      [
-        [null, null, 7, 5],
-        [null, null, 8, 5],
-        [null, null, 9, 5],
-        [null, null, 10, 5],
-      ],
-      [
-        null,
-        null,
-        null,
-        65536,
-        1,
-        0.95,
-        64,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        1,
-        null,
-        null,
-        [1, null, null, 3],
-      ],
-      null, // Session token (null usually works for fresh sessions)
-      null, null, null, null, null, 1,
-    ];
+    final List<dynamic> payload =
+        payloadTemplate != null && payloadTemplate.length >= 2
+        ? List<dynamic>.from(payloadTemplate)
+        : <dynamic>[
+            "models/gemini-3-flash-preview",
+            contents,
+            [
+              [null, null, 7, 5],
+              [null, null, 8, 5],
+              [null, null, 9, 5],
+              [null, null, 10, 5],
+            ],
+            [
+              null,
+              null,
+              null,
+              65536,
+              1,
+              0.95,
+              64,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              1,
+              null,
+              null,
+              [1, null, null, 3],
+            ],
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            1,
+          ];
+
+    payload[1] = contents;
 
     try {
       await _storage.write(key: 'gemini_last_request_url', value: endpoint);

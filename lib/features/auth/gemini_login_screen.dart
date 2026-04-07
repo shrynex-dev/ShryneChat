@@ -33,6 +33,7 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
     await _storage.delete(key: 'gemini_visit_id');
     await _storage.delete(key: 'gemini_request_headers');
     await _storage.delete(key: 'gemini_request_url');
+    await _storage.delete(key: 'gemini_request_body_template');
   }
 
   void _setStatus(String status) {
@@ -113,6 +114,22 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
       );
     }
     await _finishLoginIfReady();
+  }
+
+  Future<void> _captureRequestBody(dynamic body) async {
+    if (body == null) {
+      return;
+    }
+
+    try {
+      final encoded = body is String ? body : jsonEncode(body);
+      if (encoded.isEmpty) {
+        return;
+      }
+      await _storage.write(key: 'gemini_request_body_template', value: encoded);
+    } catch (_) {
+      // Keep login flow resilient if the intercepted body is not JSON-encodable.
+    }
   }
 
   Future<void> _finishLoginIfReady() async {
@@ -220,6 +237,7 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
                 if (_isGenerateContentRequest(url)) {
                   await _storage.write(key: 'gemini_request_url', value: url);
                   await _captureHeaders(ajaxRequest.headers?.getHeaders());
+                  await _captureRequestBody(ajaxRequest.data);
                 }
                 return ajaxRequest;
               },
@@ -228,6 +246,7 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
                 if (_isGenerateContentRequest(url)) {
                   await _storage.write(key: 'gemini_request_url', value: url);
                   await _captureHeaders(fetchRequest.headers);
+                  await _captureRequestBody(fetchRequest.body);
                 }
                 return fetchRequest;
               },
