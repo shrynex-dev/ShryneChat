@@ -144,6 +144,12 @@ class GeminiClient {
     ];
 
     try {
+      await _storage.write(key: 'gemini_last_request_url', value: endpoint);
+      await _storage.write(
+        key: 'gemini_last_request_body',
+        value: jsonEncode(payload),
+      );
+
       final headers = <String, String>{
         for (final entry in savedHeaders.entries)
           if (!_blockedForwardHeaders.contains(entry.key))
@@ -174,6 +180,15 @@ class GeminiClient {
         body: jsonEncode(payload),
       );
 
+      await _storage.write(
+        key: 'gemini_last_response_status',
+        value: response.statusCode.toString(),
+      );
+      await _storage.write(
+        key: 'gemini_last_response_body',
+        value: response.body,
+      );
+
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         final parsedText = _extractAssistantText(data);
@@ -187,6 +202,11 @@ class GeminiClient {
       }
       return "Google error: ${response.statusCode}";
     } catch (e) {
+      await _storage.write(key: 'gemini_last_response_status', value: 'error');
+      await _storage.write(
+        key: 'gemini_last_response_body',
+        value: e.toString(),
+      );
       return "Connection failed: $e";
     }
   }
