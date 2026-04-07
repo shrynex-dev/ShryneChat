@@ -43,6 +43,12 @@ class GeminiClient {
     return decoded is List<dynamic> ? decoded : null;
   }
 
+  bool _hasSessionTemplateSlot(List<dynamic> payload) {
+    return payload.length > 4 &&
+        payload[4] is String &&
+        (payload[4] as String).isNotEmpty;
+  }
+
   String? _extractAssistantText(List<dynamic> data) {
     if (data.isEmpty || data.first is! List) {
       return null;
@@ -124,7 +130,9 @@ class GeminiClient {
     ]);
 
     final List<dynamic> payload =
-        payloadTemplate != null && payloadTemplate.length >= 2
+        payloadTemplate != null &&
+            payloadTemplate.length >= 2 &&
+            _hasSessionTemplateSlot(payloadTemplate)
         ? List<dynamic>.from(payloadTemplate)
         : <dynamic>[
             "models/gemini-3-flash-preview",
@@ -164,6 +172,10 @@ class GeminiClient {
           ];
 
     payload[1] = contents;
+
+    if (!_hasSessionTemplateSlot(payload)) {
+      return 'Error: Gemini request template is incomplete. Re-login, send one short prompt inside AI Studio, and wait for the login screen to close on its own.';
+    }
 
     try {
       await _storage.write(key: 'gemini_last_request_url', value: endpoint);

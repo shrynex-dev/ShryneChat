@@ -62,6 +62,12 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
         url.contains('GenerateContent');
   }
 
+  bool _hasSessionTemplateSlot(List<dynamic> payload) {
+    return payload.length > 4 &&
+        payload[4] is String &&
+        (payload[4] as String).isNotEmpty;
+  }
+
   Future<void> _captureCookies(WebUri? url) async {
     if (url == null) {
       return;
@@ -130,6 +136,13 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
     try {
       final encoded = body is String ? body : jsonEncode(body);
       if (encoded.isEmpty) {
+        return;
+      }
+      final decoded = jsonDecode(encoded);
+      if (decoded is! List<dynamic> || !_hasSessionTemplateSlot(decoded)) {
+        _setStatus(
+          'GenerateContent seen, but waiting for a full Gemini request template...',
+        );
         return;
       }
       await _storage.write(key: 'gemini_request_body_template', value: encoded);
