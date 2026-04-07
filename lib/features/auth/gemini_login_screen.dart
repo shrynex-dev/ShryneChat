@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -29,6 +31,8 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
     await _storage.delete(key: 'gemini_cookies');
     await _storage.delete(key: 'gemini_auth');
     await _storage.delete(key: 'gemini_visit_id');
+    await _storage.delete(key: 'gemini_request_headers');
+    await _storage.delete(key: 'gemini_request_url');
   }
 
   void _setStatus(String status) {
@@ -90,6 +94,10 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
     if (visitId != null && visitId.isNotEmpty) {
       await _storage.write(key: 'gemini_visit_id', value: visitId);
     }
+    await _storage.write(
+      key: 'gemini_request_headers',
+      value: jsonEncode(normalizedHeaders),
+    );
 
     if (!_authCaptured) {
       _authCaptured = true;
@@ -131,7 +139,7 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Sign in to Google AI Studio. This screen will stay open until both cookies and Gemini auth headers are captured.',
+                  'Sign in to Google AI Studio. If the screen does not finish automatically, send one short prompt inside AI Studio so the app can capture the same request headers it needs for chat.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 12),
@@ -199,6 +207,7 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
                 if (url.contains('GenerateContent') ||
                     url.contains('makersuite') ||
                     url.contains('alkali')) {
+                  await _storage.write(key: 'gemini_request_url', value: url);
                   await _captureHeaders(request.headers);
                 }
                 return null;
@@ -208,6 +217,7 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
                 if (url.contains('GenerateContent') ||
                     url.contains('makersuite') ||
                     url.contains('alkali')) {
+                  await _storage.write(key: 'gemini_request_url', value: url);
                   await _captureHeaders(ajaxRequest.headers?.getHeaders());
                 }
                 return ajaxRequest;
@@ -217,6 +227,7 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
                 if (url.contains('GenerateContent') ||
                     url.contains('makersuite') ||
                     url.contains('alkali')) {
+                  await _storage.write(key: 'gemini_request_url', value: url);
                   await _captureHeaders(fetchRequest.headers);
                 }
                 return fetchRequest;
