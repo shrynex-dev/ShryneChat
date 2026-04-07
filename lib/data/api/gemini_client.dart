@@ -34,6 +34,52 @@ class GeminiClient {
     };
   }
 
+  String? _extractBestText(dynamic value) {
+    final candidates = <String>[];
+
+    void collect(dynamic node) {
+      if (node is String) {
+        final text = node.trim();
+        if (text.isEmpty) {
+          return;
+        }
+        if (text.length == 1 &&
+            RegExp(r'^[a-z]$', caseSensitive: false).hasMatch(text)) {
+          return;
+        }
+        if (text.startsWith('http://') || text.startsWith('https://')) {
+          return;
+        }
+        if (text.startsWith('models/')) {
+          return;
+        }
+        candidates.add(text);
+        return;
+      }
+
+      if (node is List) {
+        for (final item in node) {
+          collect(item);
+        }
+        return;
+      }
+
+      if (node is Map) {
+        for (final item in node.values) {
+          collect(item);
+        }
+      }
+    }
+
+    collect(value);
+    if (candidates.isEmpty) {
+      return null;
+    }
+
+    candidates.sort((a, b) => b.length.compareTo(a.length));
+    return candidates.first;
+  }
+
   Future<String> getResponse(
     String prompt,
     List<ChatMessageModel> history,
@@ -135,7 +181,11 @@ class GeminiClient {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        return data[1][0][0][0].toString();
+        final parsedText = _extractBestText(data);
+        if (parsedText != null) {
+          return parsedText;
+        }
+        return 'Google response parsed, but no assistant text was found.';
       }
       if (response.statusCode == 401) {
         return 'Google error: 401. Re-login and send one short prompt inside AI Studio before returning here so the app can capture the full request headers.';
