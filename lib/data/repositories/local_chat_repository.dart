@@ -1,12 +1,12 @@
-import '../api/gemini_client.dart';
+import '../../features/gemini/application/gemini_webview_session.dart';
 import '../local/app_database.dart';
 import '../models/chat_models.dart';
 import 'chat_repository.dart';
 
 class LocalChatRepository implements ChatRepository {
-  LocalChatRepository(this._database);
+  LocalChatRepository(this._database, this._geminiSession);
   final AppDatabase _database;
-  final _api = GeminiClient();
+  final GeminiWebViewSessionController _geminiSession;
 
   @override
   Stream<List<ConversationSummary>> watchConversations() =>
@@ -46,28 +46,19 @@ class LocalChatRepository implements ChatRepository {
       status: MessageStatus.sent,
     );
 
-    // 2. Get previous messages so Gemini has "Memory"
-    // We use your watchMessages stream but converted to a list
-    final messages = await _database.watchMessages(conversationId).first;
-    final remoteState = await _database.getConversationRemoteState(
-      conversationId,
-    );
-
-    // 3. Request answer from Gemini
-    final aiResponse = await _api.getResponse(messages, remoteState);
-
-    // 4. Save Gemini's answer to local database
+    final responseText = await () async {
+      try {
+        return await _geminiSession.sendPrompt(text);
+      } catch (error) {
+        return 'Gemini session error: $error. Open the Gemini session screen and sign in before sending messages.';
+      }
+    }();
     await _database.insertMessage(
       conversationId: conversationId,
       role: MessageRole.assistant,
-      body: aiResponse.displayText,
-      transportData: aiResponse.assistantTurnData,
+      body: responseText,
       format: MessageFormat.markdown,
       status: MessageStatus.sent,
-    );
-    await _database.updateConversationRemoteState(
-      conversationId,
-      aiResponse.remoteState,
     );
   }
 

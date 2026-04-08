@@ -4,10 +4,14 @@ import '../../../data/models/chat_models.dart';
 import '../../../data/repositories/chat_repository.dart';
 import '../../../data/repositories/local_chat_repository.dart';
 import '../../../data/repositories/local_settings_repository.dart';
+import '../../gemini/application/gemini_webview_session.dart';
 
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   ref.watch(databaseReadyProvider);
-  return LocalChatRepository(ref.watch(databaseProvider));
+  return LocalChatRepository(
+    ref.watch(databaseProvider),
+    ref.read(geminiWebViewSessionProvider.notifier),
+  );
 });
 
 final conversationsProvider = StreamProvider<List<ConversationSummary>>((ref) {

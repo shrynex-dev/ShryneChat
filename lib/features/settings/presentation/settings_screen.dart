@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../data/repositories/local_settings_repository.dart';
 import '../../chat/application/chat_providers.dart';
+import '../../gemini/application/gemini_webview_session.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -170,35 +170,23 @@ class _SectionCard extends StatelessWidget {
 class _GeminiLoginTile extends StatelessWidget {
   const _GeminiLoginTile();
 
-  static const _storage = FlutterSecureStorage();
-
-  Future<bool> _hasLogin() async {
-    final cookies = await _storage.read(key: 'gemini_cookies');
-    final auth = await _storage.read(key: 'gemini_auth');
-    return (cookies?.isNotEmpty ?? false) && (auth?.isNotEmpty ?? false);
-  }
-
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<bool>(
-      future: _hasLogin(),
-      builder: (context, snapshot) {
-        final isConnected = snapshot.data ?? false;
-
+    return Consumer(
+      builder: (context, ref, child) {
+        final session = ref.watch(geminiWebViewSessionProvider);
         return ListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Google AI Studio login'),
-          subtitle: Text(
-            isConnected
-                ? 'Gemini session detected on this device.'
-                : 'Open the login screen to capture the Gemini session tokens.',
-          ),
+          title: const Text('Google AI Studio session'),
+          subtitle: Text(session.status),
           trailing: FilledButton.tonalIcon(
             onPressed: () => context.push('/login'),
             icon: Icon(
-              isConnected ? Icons.refresh_rounded : Icons.login_rounded,
+              session.appearsReady
+                  ? Icons.open_in_browser_rounded
+                  : Icons.login_rounded,
             ),
-            label: Text(isConnected ? 'Reconnect' : 'Login'),
+            label: Text(session.appearsReady ? 'Open' : 'Start'),
           ),
         );
       },

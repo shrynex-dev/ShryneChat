@@ -1,191 +1,40 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class GeminiLoginScreen extends StatefulWidget {
+import '../gemini/application/gemini_webview_session.dart';
+
+class GeminiLoginScreen extends ConsumerStatefulWidget {
   const GeminiLoginScreen({super.key});
 
   @override
-  State<GeminiLoginScreen> createState() => _GeminiLoginScreenState();
+  ConsumerState<GeminiLoginScreen> createState() => _GeminiLoginScreenState();
 }
 
-class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
-  static const _storage = FlutterSecureStorage();
-
+class _GeminiLoginScreenState extends ConsumerState<GeminiLoginScreen> {
   double _progress = 0;
-  bool _capturedLogin = false;
-  bool _cookiesCaptured = false;
-  bool _authCaptured = false;
-  bool _bodyTemplateCaptured = false;
-  String _status = 'Waiting for Google AI Studio to finish sign-in...';
-
-  @override
-  void initState() {
-    super.initState();
-    _resetStoredSession();
-  }
-
-  Future<void> _resetStoredSession() async {
-    await _storage.delete(key: 'gemini_cookies');
-    await _storage.delete(key: 'gemini_auth');
-    await _storage.delete(key: 'gemini_visit_id');
-    await _storage.delete(key: 'gemini_request_headers');
-    await _storage.delete(key: 'gemini_request_url');
-    await _storage.delete(key: 'gemini_request_body_template');
-    _bodyTemplateCaptured = false;
-  }
-
-  void _setStatus(String status) {
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _status = status;
-    });
-  }
-
-  Map<String, String> _normalizeHeaders(Map<dynamic, dynamic>? headers) {
-    if (headers == null) {
-      return const {};
-    }
-    return {
-      for (final entry in headers.entries)
-        entry.key.toString().toLowerCase(): entry.value.toString(),
-    };
-  }
-
-  bool _isGenerateContentRequest(String url) {
-    return url.contains('MakerSuiteService/GenerateContent') ||
-        url.contains('GenerateContent');
-  }
-
-  bool _hasSessionTemplateSlot(List<dynamic> payload) {
-    return payload.length > 4 &&
-        payload[4] is String &&
-        (payload[4] as String).isNotEmpty;
-  }
-
-  Future<void> _captureCookies(WebUri? url) async {
-    if (url == null) {
-      return;
-    }
-
-    final cookies = await CookieManager.instance().getCookies(url: url);
-    final cookieString = cookies
-        .where((cookie) => cookie.name.isNotEmpty)
-        .map((cookie) => '${cookie.name}=${cookie.value}')
-        .join('; ');
-
-    if (cookieString.isEmpty) {
-      return;
-    }
-
-    await _storage.write(key: 'gemini_cookies', value: cookieString);
-    if (!_cookiesCaptured) {
-      _cookiesCaptured = true;
-      _setStatus(
-        _authCaptured
-            ? _bodyTemplateCaptured
-                  ? 'Cookies captured. Finishing login...'
-                  : 'Cookies captured. Waiting for Gemini request body...'
-            : 'Cookies captured. Waiting for Gemini auth headers...',
-      );
-    }
-    await _finishLoginIfReady();
-  }
-
-  Future<void> _captureHeaders(Map<dynamic, dynamic>? headers) async {
-    final normalizedHeaders = _normalizeHeaders(headers);
-    final authHeader = normalizedHeaders['authorization'];
-    final visitId = normalizedHeaders['x-aistudio-visit-id'];
-
-    if (authHeader == null || authHeader.isEmpty) {
-      return;
-    }
-
-    await _storage.write(key: 'gemini_auth', value: authHeader);
-    if (visitId != null && visitId.isNotEmpty) {
-      await _storage.write(key: 'gemini_visit_id', value: visitId);
-    }
-    await _storage.write(
-      key: 'gemini_request_headers',
-      value: jsonEncode(normalizedHeaders),
-    );
-
-    if (!_authCaptured) {
-      _authCaptured = true;
-      _setStatus(
-        _cookiesCaptured
-            ? _bodyTemplateCaptured
-                  ? 'Auth headers captured. Finishing login...'
-                  : 'Auth headers captured. Waiting for Gemini request body...'
-            : 'Auth headers captured. Waiting for Gemini cookies...',
-      );
-    }
-    await _finishLoginIfReady();
-  }
-
-  Future<void> _captureRequestBody(dynamic body) async {
-    if (body == null) {
-      return;
-    }
-
-    try {
-      final encoded = body is String ? body : jsonEncode(body);
-      if (encoded.isEmpty) {
-        return;
-      }
-      final decoded = jsonDecode(encoded);
-      if (decoded is! List<dynamic> || !_hasSessionTemplateSlot(decoded)) {
-        _setStatus(
-          'GenerateContent seen, but waiting for a full Gemini request template...',
-        );
-        return;
-      }
-      await _storage.write(key: 'gemini_request_body_template', value: encoded);
-      if (!_bodyTemplateCaptured) {
-        _bodyTemplateCaptured = true;
-        _setStatus(
-          _cookiesCaptured && _authCaptured
-              ? 'Request body captured. Finishing login...'
-              : _authCaptured
-              ? 'Request body captured. Waiting for Gemini cookies...'
-              : 'Request body captured. Waiting for Gemini auth headers...',
-        );
-      }
-      await _finishLoginIfReady();
-    } catch (_) {
-      // Keep login flow resilient if the intercepted body is not JSON-encodable.
-    }
-  }
-
-  Future<void> _finishLoginIfReady() async {
-    if (_capturedLogin ||
-        !_cookiesCaptured ||
-        !_authCaptured ||
-        !_bodyTemplateCaptured) {
-      return;
-    }
-
-    _capturedLogin = true;
-    _setStatus('Gemini login saved successfully.');
-
-    if (!context.mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Gemini login saved successfully.')),
-    );
-    context.pop();
-  }
 
   @override
   Widget build(BuildContext context) {
+    final session = ref.watch(geminiWebViewSessionProvider);
+    final sessionController = ref.read(geminiWebViewSessionProvider.notifier);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Login to Google AI Studio')),
+      appBar: AppBar(
+        title: const Text('Gemini Session'),
+        actions: [
+          IconButton(
+            tooltip: 'Open AI Studio',
+            onPressed: sessionController.openAiStudioHome,
+            icon: const Icon(Icons.open_in_browser_rounded),
+          ),
+          IconButton(
+            tooltip: 'Reload',
+            onPressed: sessionController.reload,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
@@ -194,7 +43,7 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Sign in to Google AI Studio. If the screen does not finish automatically, send one short prompt inside AI Studio so the app can capture the same request headers it needs for chat.',
+                  'This screen is now the persistent Gemini session host. Sign in to AI Studio here. The next transport step will drive the real page through an injected JavaScript bridge instead of replaying private RPCs.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 12),
@@ -203,10 +52,33 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  _status,
+                  session.status,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _StatusChip(
+                      label: session.hasController ? 'Attached' : 'Detached',
+                    ),
+                    _StatusChip(
+                      label: session.bridgeInstalled
+                          ? 'Bridge installed'
+                          : 'Bridge pending',
+                    ),
+                    _StatusChip(
+                      label: session.appLoaded ? 'App loaded' : 'Not in app',
+                    ),
+                    _StatusChip(
+                      label: session.hasPromptInput
+                          ? 'Prompt input found'
+                          : 'Prompt input missing',
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -217,13 +89,20 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
                 javaScriptEnabled: true,
                 thirdPartyCookiesEnabled: true,
                 sharedCookiesEnabled: true,
-                useShouldInterceptRequest: true,
-                useShouldInterceptAjaxRequest: true,
-                useShouldInterceptFetchRequest: true,
               ),
               initialUrlRequest: URLRequest(
                 url: WebUri('https://aistudio.google.com/'),
               ),
+              onWebViewCreated: (controller) {
+                sessionController.attachController(controller);
+                controller.addJavaScriptHandler(
+                  handlerName: 'geminiSessionEvent',
+                  callback: (args) {
+                    sessionController.handleBridgeEvent(args);
+                    return null;
+                  },
+                );
+              },
               onProgressChanged: (controller, progress) {
                 if (!mounted) {
                   return;
@@ -233,62 +112,26 @@ class _GeminiLoginScreenState extends State<GeminiLoginScreen> {
                 });
               },
               onLoadStart: (controller, url) {
-                if (url != null) {
-                  _setStatus('Loading ${url.host}...');
-                }
+                sessionController.handleLoadStart(url);
               },
               onLoadStop: (controller, url) async {
-                if (url == null || _capturedLogin) {
-                  return;
-                }
-                if (url.host.contains('aistudio.google.com')) {
-                  await _captureCookies(url);
-                  if (!_capturedLogin && url.toString().contains('/app/')) {
-                    _setStatus(
-                      _authCaptured
-                          ? _bodyTemplateCaptured
-                                ? 'AI Studio loaded. Waiting for final cookies...'
-                                : 'AI Studio loaded. Waiting for Gemini request body...'
-                          : 'AI Studio loaded. Waiting for Gemini auth request...',
-                    );
-                  }
-                }
-              },
-              onUpdateVisitedHistory: (controller, url, isReload) async {
-                if (url != null && url.host.contains('aistudio.google.com')) {
-                  await _captureCookies(url);
-                }
-              },
-              shouldInterceptRequest: (controller, request) async {
-                final url = request.url.toString();
-                if (_isGenerateContentRequest(url)) {
-                  await _storage.write(key: 'gemini_request_url', value: url);
-                  await _captureHeaders(request.headers);
-                }
-                return null;
-              },
-              shouldInterceptAjaxRequest: (controller, ajaxRequest) async {
-                final url = ajaxRequest.url.toString();
-                if (_isGenerateContentRequest(url)) {
-                  await _storage.write(key: 'gemini_request_url', value: url);
-                  await _captureHeaders(ajaxRequest.headers?.getHeaders());
-                  await _captureRequestBody(ajaxRequest.data);
-                }
-                return ajaxRequest;
-              },
-              shouldInterceptFetchRequest: (controller, fetchRequest) async {
-                final url = fetchRequest.url.toString();
-                if (_isGenerateContentRequest(url)) {
-                  await _storage.write(key: 'gemini_request_url', value: url);
-                  await _captureHeaders(fetchRequest.headers);
-                  await _captureRequestBody(fetchRequest.body);
-                }
-                return fetchRequest;
+                await sessionController.handleLoadStop(url);
               },
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(label: Text(label));
   }
 }

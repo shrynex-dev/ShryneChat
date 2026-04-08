@@ -1,7 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -37,11 +36,6 @@ class ChatHomeScreen extends ConsumerWidget {
         ),
         actions: [
           IconButton(
-            tooltip: 'View response',
-            onPressed: () => _showLastResponse(context),
-            icon: const Icon(Icons.visibility_rounded),
-          ),
-          IconButton(
             tooltip: 'New chat',
             onPressed: () => context.go('/'),
             icon: const Icon(Icons.edit_note_rounded),
@@ -67,113 +61,6 @@ class ChatHomeScreen extends ConsumerWidget {
           ],
         ),
       ),
-    );
-  }
-
-  Future<void> _showLastResponse(BuildContext context) async {
-    const storage = FlutterSecureStorage();
-    final status = await storage.read(key: 'gemini_last_response_status');
-    final body = await storage.read(key: 'gemini_last_response_body');
-    final requestUrl = await storage.read(key: 'gemini_last_request_url');
-    final requestBody = await storage.read(key: 'gemini_last_request_body');
-
-    if (!context.mounted) {
-      return;
-    }
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (context) {
-        final theme = Theme.of(context);
-        final responseText = body?.trim();
-
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.8,
-          maxChildSize: 0.95,
-          minChildSize: 0.45,
-          builder: (context, controller) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Last Gemini response',
-                          style: theme.textTheme.titleLarge,
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Status: ${status ?? 'No saved response'}',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  if (requestUrl != null && requestUrl.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    SelectableText(
-                      requestUrl,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      controller: controller,
-                      child: SelectableText(
-                        responseText?.isNotEmpty == true
-                            ? responseText!
-                            : 'No Gemini response has been captured yet.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          height: 1.45,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (requestBody != null && requestBody.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    FilledButton.tonal(
-                      onPressed: () {
-                        showDialog<void>(
-                          context: context,
-                          builder: (dialogContext) => AlertDialog(
-                            title: const Text('Last request body'),
-                            content: SingleChildScrollView(
-                              child: SelectableText(requestBody),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () =>
-                                    Navigator.of(dialogContext).pop(),
-                                child: const Text('Close'),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      child: const Text('View request body'),
-                    ),
-                  ],
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }
@@ -231,8 +118,8 @@ class _GreetingState extends StatelessWidget {
             const SizedBox(height: 20),
             FilledButton.icon(
               onPressed: () => context.push('/login'),
-              icon: const Icon(Icons.login_rounded),
-              label: const Text('Login to Gemini'),
+              icon: const Icon(Icons.open_in_browser_rounded),
+              label: const Text('Open Gemini Session'),
             ),
           ],
         ),
@@ -626,8 +513,8 @@ class _ChatDrawerState extends ConsumerState<_ChatDrawer> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    leading: const Icon(Icons.login_rounded),
-                    title: const Text('Gemini login'),
+                    leading: const Icon(Icons.open_in_browser_rounded),
+                    title: const Text('Gemini session'),
                     onTap: () {
                       Navigator.of(context).pop();
                       context.push('/login');
