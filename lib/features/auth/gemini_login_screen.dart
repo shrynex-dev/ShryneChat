@@ -1,10 +1,8 @@
-import 'dart:collection';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../gemini/application/gemini_webview_session.dart';
+import '../gemini/presentation/gemini_session_webview.dart';
 
 class GeminiLoginScreen extends ConsumerStatefulWidget {
   const GeminiLoginScreen({super.key});
@@ -86,44 +84,14 @@ class _GeminiLoginScreenState extends ConsumerState<GeminiLoginScreen> {
             ),
           ),
           Expanded(
-            child: InAppWebView(
-              initialUserScripts: UnmodifiableListView([
-                UserScript(
-                  source: geminiBridgeBootstrapScript,
-                  injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
-                ),
-              ]),
-              initialSettings: InAppWebViewSettings(
-                javaScriptEnabled: true,
-                thirdPartyCookiesEnabled: true,
-                sharedCookiesEnabled: true,
-              ),
-              initialUrlRequest: URLRequest(
-                url: WebUri('https://aistudio.google.com/'),
-              ),
-              onWebViewCreated: (controller) {
-                sessionController.attachController(controller);
-                controller.addJavaScriptHandler(
-                  handlerName: 'geminiSessionEvent',
-                  callback: (args) {
-                    sessionController.handleBridgeEvent(args);
-                    return null;
-                  },
-                );
-              },
-              onProgressChanged: (controller, progress) {
+            child: GeminiSessionWebView(
+              onProgress: (value) {
                 if (!mounted) {
                   return;
                 }
                 setState(() {
-                  _progress = progress / 100;
+                  _progress = value;
                 });
-              },
-              onLoadStart: (controller, url) {
-                sessionController.handleLoadStart(url);
-              },
-              onLoadStop: (controller, url) async {
-                await sessionController.handleLoadStop(url);
               },
             ),
           ),

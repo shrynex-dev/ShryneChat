@@ -9,6 +9,7 @@ import '../../../data/repositories/local_settings_repository.dart';
 import '../../../markdown/ast.dart';
 import '../../../markdown/parser.dart';
 import '../../../markdown/renderer.dart';
+import '../../gemini/presentation/gemini_session_webview.dart';
 import '../application/chat_providers.dart';
 
 class ChatHomeScreen extends ConsumerWidget {
@@ -42,24 +43,32 @@ class ChatHomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Expanded(
-              child: messagesAsync.when(
-                data: (messages) => _ChatBody(
-                  conversationId: conversationId,
-                  messages: messages,
-                ),
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, stackTrace) =>
-                    Center(child: Text('Failed to load chat: $error')),
+      body: Stack(
+        children: [
+          const GeminiSessionWebView(visible: false),
+          Positioned.fill(
+            child: SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: messagesAsync.when(
+                      data: (messages) => _ChatBody(
+                        conversationId: conversationId,
+                        messages: messages,
+                      ),
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
+                      error: (error, stackTrace) =>
+                          Center(child: Text('Failed to load chat: $error')),
+                    ),
+                  ),
+                  ChatComposer(conversationId: conversationId),
+                ],
               ),
             ),
-            ChatComposer(conversationId: conversationId),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
