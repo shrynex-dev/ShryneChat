@@ -1,7 +1,6 @@
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:async';
-import 'dart:convert';
 
 class GeminiWebViewSessionState {
   const GeminiWebViewSessionState({
@@ -28,7 +27,7 @@ class GeminiWebViewSessionState {
   final String? activeRequestId;
   final String? lastResponsePreview;
 
-  bool get appearsReady => appLoaded && hasPromptInput;
+  bool get appearsReady => hasController && bridgeInstalled && hasPromptInput;
 
   GeminiWebViewSessionState copyWith({
     String? currentUrl,
@@ -88,9 +87,8 @@ class GeminiWebViewSessionController
     state = state.copyWith(
       currentUrl: url?.toString(),
       pageTitle: await _controller?.getTitle(),
-      status: 'Page loaded. Installing Gemini bridge...',
+      status: 'Page loaded. Waiting for the Gemini bridge to initialize...',
     );
-    await injectBridge();
   }
 
   void handleBridgeEvent(List<dynamic> args) {
@@ -114,7 +112,7 @@ class GeminiWebViewSessionController
       final title = event['title']?.toString();
       final hasPromptInput = event['hasPromptInput'] == true;
       final hasSendButton = event['hasSendButton'] == true;
-      final appLoaded = href?.contains('/app/') == true;
+      final appLoaded = hasPromptInput || hasSendButton;
 
       state = state.copyWith(
         currentUrl: href ?? state.currentUrl,
@@ -122,11 +120,9 @@ class GeminiWebViewSessionController
         appLoaded: appLoaded,
         hasPromptInput: hasPromptInput,
         hasSendButton: hasSendButton,
-        status: appLoaded
-            ? hasPromptInput
-                  ? 'AI Studio is loaded. WebView transport scaffold is ready.'
-                  : 'AI Studio is open. Waiting for prompt input to appear...'
-            : 'Sign in and open AI Studio to continue.',
+        status: hasPromptInput
+            ? 'AI Studio composer detected. Ready to send prompts.'
+            : 'Gemini session attached. Waiting for the composer to appear...',
       );
       return;
     }
@@ -184,20 +180,27 @@ class GeminiWebViewSessionController
     }
   }
 
-  Future<void> injectBridge() async {
-    if (_controller == null) {
-      return;
+  Future<void> _waitForBridgeReady() async {
+    const maxAttempts = 20;
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      if (state.bridgeInstalled && state.hasPromptInput) {
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
     }
-
-    await _controller!.evaluateJavascript(source: _bridgeBootstrapScript);
   }
 
   Future<String> sendPrompt(String prompt) async {
     if (_controller == null) {
       throw StateError('Gemini WebView controller is not attached.');
     }
+    if (!state.bridgeInstalled || !state.hasPromptInput) {
+      await _waitForBridgeReady();
+    }
     if (!state.bridgeInstalled) {
-      await injectBridge();
+      throw StateError(
+        'Gemini bridge is not installed yet. Open the Gemini session screen and wait for the bridge to attach.',
+      );
     }
 
     final requestId =
@@ -205,15 +208,22 @@ class GeminiWebViewSessionController
     final completer = Completer<String>();
     _pendingResponses[requestId] = completer;
 
-    await _controller!.evaluateJavascript(
-      source:
-          '''
-window.__shryneGeminiBridge && window.__shryneGeminiBridge.sendPrompt(
-  ${jsonEncode(prompt)},
-  ${jsonEncode(requestId)}
-);
-''',
+    final result = await _controller!.callAsyncJavaScript(
+      functionBody: '''
+        if (!window.__shryneGeminiBridge || !window.__shryneGeminiBridge.sendPrompt) {
+          throw new Error('Gemini bridge is not available in the page context.');
+        }
+        window.__shryneGeminiBridge.sendPrompt(prompt, requestId);
+        return true;
+      ''',
+      arguments: <String, dynamic>{
+        'prompt': prompt,
+        'requestId': requestId,
+      },
     );
+    if (result?.error != null) {
+      throw StateError(result!.error.toString());
+    }
 
     state = state.copyWith(
       activeRequestId: requestId,
@@ -244,6 +254,8 @@ final geminiWebViewSessionProvider =
     NotifierProvider<GeminiWebViewSessionController, GeminiWebViewSessionState>(
       GeminiWebViewSessionController.new,
     );
+
+const String geminiBridgeBootstrapScript = _bridgeBootstrapScript;
 
 const _bridgeBootstrapScript = '''
 (() => {

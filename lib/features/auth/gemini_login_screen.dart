@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -85,6 +87,12 @@ class _GeminiLoginScreenState extends ConsumerState<GeminiLoginScreen> {
           ),
           Expanded(
             child: InAppWebView(
+              initialUserScripts: UnmodifiableListView([
+                UserScript(
+                  source: geminiBridgeBootstrapScript,
+                  injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                ),
+              ]),
               initialSettings: InAppWebViewSettings(
                 javaScriptEnabled: true,
                 thirdPartyCookiesEnabled: true,
