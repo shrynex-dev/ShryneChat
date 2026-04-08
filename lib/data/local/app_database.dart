@@ -17,6 +17,7 @@ class Conversations extends Table {
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
   TextColumn get lastMessagePreview => text().withDefault(const Constant(''))();
+  TextColumn get remoteState => text().nullable()();
   BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
   BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
 
@@ -29,6 +30,7 @@ class Messages extends Table {
   TextColumn get conversationId => text().references(Conversations, #id)();
   TextColumn get role => text()();
   TextColumn get body => text()();
+  TextColumn get transportData => text().nullable()();
   TextColumn get format => text()();
   DateTimeColumn get createdAt => dateTime()();
   IntColumn get sequence => integer()();
@@ -58,7 +60,18 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (migrator) async => migrator.createAll(),
+    onUpgrade: (migrator, from, to) async {
+      if (from < 2) {
+        await migrator.addColumn(conversations, conversations.remoteState);
+        await migrator.addColumn(messages, messages.transportData);
+      }
+    },
+  );
 
   Future<void> ensureSeeded() async {
     final existing = await select(appSettingsTable).getSingleOrNull();
@@ -139,6 +152,7 @@ class AppDatabase extends _$AppDatabase {
         createdAt: now,
         updatedAt: now,
         lastMessagePreview: Value(preview),
+        remoteState: const Value.absent(),
       ),
     );
     return id;
@@ -160,6 +174,7 @@ class AppDatabase extends _$AppDatabase {
     required MessageFormat format,
     required MessageStatus status,
     required String body,
+    String? transportData,
   }) async {
     final now = DateTime.now();
     final sequenceValue = await nextSequence(conversationId);
@@ -169,6 +184,7 @@ class AppDatabase extends _$AppDatabase {
         conversationId: conversationId,
         role: role.name,
         body: body,
+        transportData: Value(transportData),
         format: format.name,
         createdAt: now,
         sequence: sequenceValue,
@@ -191,6 +207,22 @@ class AppDatabase extends _$AppDatabase {
             : const Value.absent(),
       ),
     );
+  }
+
+  Future<String?> getConversationRemoteState(String conversationId) async {
+    final row = await (select(
+      conversations,
+    )..where((tbl) => tbl.id.equals(conversationId))).getSingleOrNull();
+    return row?.remoteState;
+  }
+
+  Future<void> updateConversationRemoteState(
+    String conversationId,
+    String? remoteState,
+  ) {
+    return (update(conversations)
+          ..where((tbl) => tbl.id.equals(conversationId)))
+        .write(ConversationsCompanion(remoteState: Value(remoteState)));
   }
 
   Stream<AppSettingsModel> watchSettings() {
@@ -223,6 +255,7 @@ class AppDatabase extends _$AppDatabase {
       conversationId: row.conversationId,
       role: MessageRole.values.byName(row.role),
       body: row.body,
+      transportData: row.transportData,
       format: MessageFormat.values.byName(row.format),
       createdAt: row.createdAt,
       sequence: row.sequence,

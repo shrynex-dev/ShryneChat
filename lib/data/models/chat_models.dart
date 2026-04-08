@@ -36,6 +36,7 @@ class ChatMessageModel {
     required this.createdAt,
     required this.sequence,
     required this.status,
+    this.transportData,
   });
 
   final String id;
@@ -46,6 +47,7 @@ class ChatMessageModel {
   final DateTime createdAt;
   final int sequence;
   final MessageStatus status;
+  final String? transportData;
 
   bool get isAssistant => role == MessageRole.assistant;
 }

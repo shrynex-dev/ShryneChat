@@ -9,20 +9,23 @@ class LocalChatRepository implements ChatRepository {
   final _api = GeminiClient();
 
   @override
-  Stream<List<ConversationSummary>> watchConversations() => _database.watchConversations();
+  Stream<List<ConversationSummary>> watchConversations() =>
+      _database.watchConversations();
 
   @override
-  Future<ConversationSummary?> getConversation(String id) => _database.getConversation(id);
+  Future<ConversationSummary?> getConversation(String id) =>
+      _database.getConversation(id);
 
   @override
-  Stream<List<ChatMessageModel>> watchMessages(String id) => _database.watchMessages(id);
+  Stream<List<ChatMessageModel>> watchMessages(String id) =>
+      _database.watchMessages(id);
 
   @override
   Future<String> startConversation(String text) async {
     // Create the chat entry in SQLite
     final id = await _database.createConversation(
-      title: 'New Chat', 
-      preview: text
+      title: 'New Chat',
+      preview: text,
     );
     // Send the message
     await sendUserMessage(conversationId: id, text: text);
@@ -30,7 +33,10 @@ class LocalChatRepository implements ChatRepository {
   }
 
   @override
-  Future<void> sendUserMessage({required String conversationId, required String text}) async {
+  Future<void> sendUserMessage({
+    required String conversationId,
+    required String text,
+  }) async {
     // 1. Save your message to local database
     await _database.insertMessage(
       conversationId: conversationId,
@@ -43,17 +49,25 @@ class LocalChatRepository implements ChatRepository {
     // 2. Get previous messages so Gemini has "Memory"
     // We use your watchMessages stream but converted to a list
     final messages = await _database.watchMessages(conversationId).first;
+    final remoteState = await _database.getConversationRemoteState(
+      conversationId,
+    );
 
     // 3. Request answer from Gemini
-    final aiText = await _api.getResponse(text, messages);
+    final aiResponse = await _api.getResponse(messages, remoteState);
 
     // 4. Save Gemini's answer to local database
     await _database.insertMessage(
       conversationId: conversationId,
       role: MessageRole.assistant,
-      body: aiText,
+      body: aiResponse.displayText,
+      transportData: aiResponse.assistantTurnData,
       format: MessageFormat.markdown,
       status: MessageStatus.sent,
+    );
+    await _database.updateConversationRemoteState(
+      conversationId,
+      aiResponse.remoteState,
     );
   }
 

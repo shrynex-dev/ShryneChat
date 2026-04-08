@@ -5,6 +5,18 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../models/chat_models.dart';
 
+class GeminiResponseResult {
+  const GeminiResponseResult({
+    required this.displayText,
+    this.assistantTurnData,
+    this.remoteState,
+  });
+
+  final String displayText;
+  final String? assistantTurnData;
+  final String? remoteState;
+}
+
 class GeminiClient {
   final _storage = const FlutterSecureStorage();
   final String _defaultUrl =
@@ -49,6 +61,135 @@ class GeminiClient {
         (payload[4] as String).isNotEmpty;
   }
 
+  bool _isRemoteState(String? value) {
+    return value != null && value.startsWith('v1_') && value.isNotEmpty;
+  }
+
+  List<dynamic> _buildContents(List<ChatMessageModel> history) {
+    final contents = <dynamic>[];
+    for (final message in history) {
+      if (message.role == MessageRole.user) {
+        contents.add([
+          [
+            [null, message.body],
+          ],
+          'user',
+        ]);
+        continue;
+      }
+
+      if (message.role == MessageRole.assistant &&
+          message.transportData != null) {
+        final decoded = jsonDecode(message.transportData!);
+        if (decoded is List<dynamic>) {
+          contents.add(decoded);
+          continue;
+        }
+      }
+
+      if (message.role == MessageRole.assistant) {
+        contents.add([
+          [
+            [null, message.body],
+          ],
+          'model',
+        ]);
+      }
+    }
+    return contents;
+  }
+
+  String? _extractHiddenBlob(List<dynamic> data) {
+    String? hiddenBlob;
+
+    void visit(dynamic node) {
+      if (node is List) {
+        if (node.length > 14 &&
+            node.first == null &&
+            node[1] is String &&
+            node[14] is String &&
+            (node[14] as String).isNotEmpty) {
+          hiddenBlob = node[14] as String;
+        }
+        for (final item in node) {
+          visit(item);
+        }
+      } else if (node is Map) {
+        for (final value in node.values) {
+          visit(value);
+        }
+      }
+    }
+
+    visit(data);
+    return hiddenBlob;
+  }
+
+  String? _extractRemoteState(List<dynamic> data) {
+    String? remoteState;
+
+    void visit(dynamic node) {
+      if (node is String && _isRemoteState(node)) {
+        remoteState = node;
+        return;
+      }
+      if (node is List) {
+        for (final item in node) {
+          visit(item);
+        }
+      } else if (node is Map) {
+        for (final value in node.values) {
+          visit(value);
+        }
+      }
+    }
+
+    visit(data);
+    return remoteState;
+  }
+
+  String? _buildAssistantTurnData(List<dynamic> data) {
+    final displayText = _extractAssistantText(data);
+    if (displayText == null) {
+      return null;
+    }
+
+    final hiddenBlob = _extractHiddenBlob(data);
+    final parts = <dynamic>[
+      [null, displayText],
+    ];
+    if (hiddenBlob != null) {
+      parts.add([
+        null,
+        '',
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        hiddenBlob,
+      ]);
+    }
+    return jsonEncode([parts, 'model']);
+  }
+
+  void _applyRemoteState(List<dynamic> payload, String? remoteState) {
+    final lastValue = payload.isNotEmpty ? payload.last : null;
+    if (lastValue is String && _isRemoteState(lastValue)) {
+      payload.removeLast();
+    }
+    if (_isRemoteState(remoteState)) {
+      payload.add(remoteState);
+    }
+  }
+
   String? _extractAssistantText(List<dynamic> data) {
     if (data.isEmpty || data.first is! List) {
       return null;
@@ -90,9 +231,9 @@ class GeminiClient {
     return current;
   }
 
-  Future<String> getResponse(
-    String prompt,
+  Future<GeminiResponseResult> getResponse(
     List<ChatMessageModel> history,
+    String? remoteState,
   ) async {
     final cookies = await _storage.read(key: 'gemini_cookies');
     final auth = await _storage.read(key: 'gemini_auth');
@@ -108,26 +249,14 @@ class GeminiClient {
     final payloadTemplate = _decodeSavedPayloadTemplate(rawPayloadTemplate);
 
     if (cookies == null || auth == null) {
-      return "Error: Please login first.";
+      return const GeminiResponseResult(
+        displayText: 'Error: Please login first.',
+      );
     }
 
     final endpoint = requestUrl?.isNotEmpty == true ? requestUrl! : _defaultUrl;
 
-    final List<dynamic> contents = [];
-    for (var msg in history) {
-      contents.add([
-        [
-          [null, msg.body],
-        ],
-        msg.isAssistant ? "model" : "user",
-      ]);
-    }
-    contents.add([
-      [
-        [null, prompt],
-      ],
-      "user",
-    ]);
+    final contents = _buildContents(history);
 
     final List<dynamic> payload =
         payloadTemplate != null &&
@@ -172,9 +301,13 @@ class GeminiClient {
           ];
 
     payload[1] = contents;
+    _applyRemoteState(payload, remoteState);
 
     if (!_hasSessionTemplateSlot(payload)) {
-      return 'Error: Gemini request template is incomplete. Re-login, send one short prompt inside AI Studio, and wait for the login screen to close on its own.';
+      return const GeminiResponseResult(
+        displayText:
+            'Error: Gemini request template is incomplete. Re-login, send one short prompt inside AI Studio, and wait for the login screen to close on its own.',
+      );
     }
 
     try {
@@ -227,21 +360,34 @@ class GeminiClient {
         final List<dynamic> data = jsonDecode(response.body);
         final parsedText = _extractAssistantText(data);
         if (parsedText != null) {
-          return parsedText;
+          return GeminiResponseResult(
+            displayText: parsedText,
+            assistantTurnData: _buildAssistantTurnData(data),
+            remoteState: _extractRemoteState(data),
+          );
         }
-        return 'Google response parsed, but no assistant text was found.';
+        return GeminiResponseResult(
+          displayText:
+              'Google response parsed, but no assistant text was found.',
+          remoteState: _extractRemoteState(data),
+        );
       }
       if (response.statusCode == 401) {
-        return 'Google error: 401. Re-login and send one short prompt inside AI Studio before returning here so the app can capture the full request headers.';
+        return const GeminiResponseResult(
+          displayText:
+              'Google error: 401. Re-login and send one short prompt inside AI Studio before returning here so the app can capture the full request headers.',
+        );
       }
-      return "Google error: ${response.statusCode}";
+      return GeminiResponseResult(
+        displayText: "Google error: ${response.statusCode}",
+      );
     } catch (e) {
       await _storage.write(key: 'gemini_last_response_status', value: 'error');
       await _storage.write(
         key: 'gemini_last_response_body',
         value: e.toString(),
       );
-      return "Connection failed: $e";
+      return GeminiResponseResult(displayText: "Connection failed: $e");
     }
   }
 }

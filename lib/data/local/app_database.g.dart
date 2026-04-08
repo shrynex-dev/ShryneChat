@@ -61,6 +61,17 @@ class $ConversationsTable extends Conversations
         requiredDuringInsert: false,
         defaultValue: const Constant(''),
       );
+  static const VerificationMeta _remoteStateMeta = const VerificationMeta(
+    'remoteState',
+  );
+  @override
+  late final GeneratedColumn<String> remoteState = GeneratedColumn<String>(
+    'remote_state',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _isPinnedMeta = const VerificationMeta(
     'isPinned',
   );
@@ -98,6 +109,7 @@ class $ConversationsTable extends Conversations
     createdAt,
     updatedAt,
     lastMessagePreview,
+    remoteState,
     isPinned,
     isArchived,
   ];
@@ -151,6 +163,15 @@ class $ConversationsTable extends Conversations
         ),
       );
     }
+    if (data.containsKey('remote_state')) {
+      context.handle(
+        _remoteStateMeta,
+        remoteState.isAcceptableOrUnknown(
+          data['remote_state']!,
+          _remoteStateMeta,
+        ),
+      );
+    }
     if (data.containsKey('is_pinned')) {
       context.handle(
         _isPinnedMeta,
@@ -192,6 +213,10 @@ class $ConversationsTable extends Conversations
         DriftSqlType.string,
         data['${effectivePrefix}last_message_preview'],
       )!,
+      remoteState: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_state'],
+      ),
       isPinned: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_pinned'],
@@ -215,6 +240,7 @@ class Conversation extends DataClass implements Insertable<Conversation> {
   final DateTime createdAt;
   final DateTime updatedAt;
   final String lastMessagePreview;
+  final String? remoteState;
   final bool isPinned;
   final bool isArchived;
   const Conversation({
@@ -223,6 +249,7 @@ class Conversation extends DataClass implements Insertable<Conversation> {
     required this.createdAt,
     required this.updatedAt,
     required this.lastMessagePreview,
+    this.remoteState,
     required this.isPinned,
     required this.isArchived,
   });
@@ -234,6 +261,9 @@ class Conversation extends DataClass implements Insertable<Conversation> {
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     map['last_message_preview'] = Variable<String>(lastMessagePreview);
+    if (!nullToAbsent || remoteState != null) {
+      map['remote_state'] = Variable<String>(remoteState);
+    }
     map['is_pinned'] = Variable<bool>(isPinned);
     map['is_archived'] = Variable<bool>(isArchived);
     return map;
@@ -246,6 +276,9 @@ class Conversation extends DataClass implements Insertable<Conversation> {
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       lastMessagePreview: Value(lastMessagePreview),
+      remoteState: remoteState == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteState),
       isPinned: Value(isPinned),
       isArchived: Value(isArchived),
     );
@@ -264,6 +297,7 @@ class Conversation extends DataClass implements Insertable<Conversation> {
       lastMessagePreview: serializer.fromJson<String>(
         json['lastMessagePreview'],
       ),
+      remoteState: serializer.fromJson<String?>(json['remoteState']),
       isPinned: serializer.fromJson<bool>(json['isPinned']),
       isArchived: serializer.fromJson<bool>(json['isArchived']),
     );
@@ -277,6 +311,7 @@ class Conversation extends DataClass implements Insertable<Conversation> {
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'lastMessagePreview': serializer.toJson<String>(lastMessagePreview),
+      'remoteState': serializer.toJson<String?>(remoteState),
       'isPinned': serializer.toJson<bool>(isPinned),
       'isArchived': serializer.toJson<bool>(isArchived),
     };
@@ -288,6 +323,7 @@ class Conversation extends DataClass implements Insertable<Conversation> {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? lastMessagePreview,
+    Value<String?> remoteState = const Value.absent(),
     bool? isPinned,
     bool? isArchived,
   }) => Conversation(
@@ -296,6 +332,7 @@ class Conversation extends DataClass implements Insertable<Conversation> {
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     lastMessagePreview: lastMessagePreview ?? this.lastMessagePreview,
+    remoteState: remoteState.present ? remoteState.value : this.remoteState,
     isPinned: isPinned ?? this.isPinned,
     isArchived: isArchived ?? this.isArchived,
   );
@@ -308,6 +345,9 @@ class Conversation extends DataClass implements Insertable<Conversation> {
       lastMessagePreview: data.lastMessagePreview.present
           ? data.lastMessagePreview.value
           : this.lastMessagePreview,
+      remoteState: data.remoteState.present
+          ? data.remoteState.value
+          : this.remoteState,
       isPinned: data.isPinned.present ? data.isPinned.value : this.isPinned,
       isArchived: data.isArchived.present
           ? data.isArchived.value
@@ -323,6 +363,7 @@ class Conversation extends DataClass implements Insertable<Conversation> {
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('lastMessagePreview: $lastMessagePreview, ')
+          ..write('remoteState: $remoteState, ')
           ..write('isPinned: $isPinned, ')
           ..write('isArchived: $isArchived')
           ..write(')'))
@@ -336,6 +377,7 @@ class Conversation extends DataClass implements Insertable<Conversation> {
     createdAt,
     updatedAt,
     lastMessagePreview,
+    remoteState,
     isPinned,
     isArchived,
   );
@@ -348,6 +390,7 @@ class Conversation extends DataClass implements Insertable<Conversation> {
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.lastMessagePreview == this.lastMessagePreview &&
+          other.remoteState == this.remoteState &&
           other.isPinned == this.isPinned &&
           other.isArchived == this.isArchived);
 }
@@ -358,6 +401,7 @@ class ConversationsCompanion extends UpdateCompanion<Conversation> {
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<String> lastMessagePreview;
+  final Value<String?> remoteState;
   final Value<bool> isPinned;
   final Value<bool> isArchived;
   final Value<int> rowid;
@@ -367,6 +411,7 @@ class ConversationsCompanion extends UpdateCompanion<Conversation> {
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.lastMessagePreview = const Value.absent(),
+    this.remoteState = const Value.absent(),
     this.isPinned = const Value.absent(),
     this.isArchived = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -377,6 +422,7 @@ class ConversationsCompanion extends UpdateCompanion<Conversation> {
     required DateTime createdAt,
     required DateTime updatedAt,
     this.lastMessagePreview = const Value.absent(),
+    this.remoteState = const Value.absent(),
     this.isPinned = const Value.absent(),
     this.isArchived = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -390,6 +436,7 @@ class ConversationsCompanion extends UpdateCompanion<Conversation> {
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<String>? lastMessagePreview,
+    Expression<String>? remoteState,
     Expression<bool>? isPinned,
     Expression<bool>? isArchived,
     Expression<int>? rowid,
@@ -401,6 +448,7 @@ class ConversationsCompanion extends UpdateCompanion<Conversation> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (lastMessagePreview != null)
         'last_message_preview': lastMessagePreview,
+      if (remoteState != null) 'remote_state': remoteState,
       if (isPinned != null) 'is_pinned': isPinned,
       if (isArchived != null) 'is_archived': isArchived,
       if (rowid != null) 'rowid': rowid,
@@ -413,6 +461,7 @@ class ConversationsCompanion extends UpdateCompanion<Conversation> {
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<String>? lastMessagePreview,
+    Value<String?>? remoteState,
     Value<bool>? isPinned,
     Value<bool>? isArchived,
     Value<int>? rowid,
@@ -423,6 +472,7 @@ class ConversationsCompanion extends UpdateCompanion<Conversation> {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       lastMessagePreview: lastMessagePreview ?? this.lastMessagePreview,
+      remoteState: remoteState ?? this.remoteState,
       isPinned: isPinned ?? this.isPinned,
       isArchived: isArchived ?? this.isArchived,
       rowid: rowid ?? this.rowid,
@@ -447,6 +497,9 @@ class ConversationsCompanion extends UpdateCompanion<Conversation> {
     if (lastMessagePreview.present) {
       map['last_message_preview'] = Variable<String>(lastMessagePreview.value);
     }
+    if (remoteState.present) {
+      map['remote_state'] = Variable<String>(remoteState.value);
+    }
     if (isPinned.present) {
       map['is_pinned'] = Variable<bool>(isPinned.value);
     }
@@ -467,6 +520,7 @@ class ConversationsCompanion extends UpdateCompanion<Conversation> {
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('lastMessagePreview: $lastMessagePreview, ')
+          ..write('remoteState: $remoteState, ')
           ..write('isPinned: $isPinned, ')
           ..write('isArchived: $isArchived, ')
           ..write('rowid: $rowid')
@@ -521,6 +575,17 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _transportDataMeta = const VerificationMeta(
+    'transportData',
+  );
+  @override
+  late final GeneratedColumn<String> transportData = GeneratedColumn<String>(
+    'transport_data',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _formatMeta = const VerificationMeta('format');
   @override
   late final GeneratedColumn<String> format = GeneratedColumn<String>(
@@ -567,6 +632,7 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
     conversationId,
     role,
     body,
+    transportData,
     format,
     createdAt,
     sequence,
@@ -615,6 +681,15 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
       );
     } else if (isInserting) {
       context.missing(_bodyMeta);
+    }
+    if (data.containsKey('transport_data')) {
+      context.handle(
+        _transportDataMeta,
+        transportData.isAcceptableOrUnknown(
+          data['transport_data']!,
+          _transportDataMeta,
+        ),
+      );
     }
     if (data.containsKey('format')) {
       context.handle(
@@ -673,6 +748,10 @@ class $MessagesTable extends Messages with TableInfo<$MessagesTable, Message> {
         DriftSqlType.string,
         data['${effectivePrefix}body'],
       )!,
+      transportData: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}transport_data'],
+      ),
       format: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}format'],
@@ -703,6 +782,7 @@ class Message extends DataClass implements Insertable<Message> {
   final String conversationId;
   final String role;
   final String body;
+  final String? transportData;
   final String format;
   final DateTime createdAt;
   final int sequence;
@@ -712,6 +792,7 @@ class Message extends DataClass implements Insertable<Message> {
     required this.conversationId,
     required this.role,
     required this.body,
+    this.transportData,
     required this.format,
     required this.createdAt,
     required this.sequence,
@@ -724,6 +805,9 @@ class Message extends DataClass implements Insertable<Message> {
     map['conversation_id'] = Variable<String>(conversationId);
     map['role'] = Variable<String>(role);
     map['body'] = Variable<String>(body);
+    if (!nullToAbsent || transportData != null) {
+      map['transport_data'] = Variable<String>(transportData);
+    }
     map['format'] = Variable<String>(format);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['sequence'] = Variable<int>(sequence);
@@ -737,6 +821,9 @@ class Message extends DataClass implements Insertable<Message> {
       conversationId: Value(conversationId),
       role: Value(role),
       body: Value(body),
+      transportData: transportData == null && nullToAbsent
+          ? const Value.absent()
+          : Value(transportData),
       format: Value(format),
       createdAt: Value(createdAt),
       sequence: Value(sequence),
@@ -754,6 +841,7 @@ class Message extends DataClass implements Insertable<Message> {
       conversationId: serializer.fromJson<String>(json['conversationId']),
       role: serializer.fromJson<String>(json['role']),
       body: serializer.fromJson<String>(json['body']),
+      transportData: serializer.fromJson<String?>(json['transportData']),
       format: serializer.fromJson<String>(json['format']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       sequence: serializer.fromJson<int>(json['sequence']),
@@ -768,6 +856,7 @@ class Message extends DataClass implements Insertable<Message> {
       'conversationId': serializer.toJson<String>(conversationId),
       'role': serializer.toJson<String>(role),
       'body': serializer.toJson<String>(body),
+      'transportData': serializer.toJson<String?>(transportData),
       'format': serializer.toJson<String>(format),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'sequence': serializer.toJson<int>(sequence),
@@ -780,6 +869,7 @@ class Message extends DataClass implements Insertable<Message> {
     String? conversationId,
     String? role,
     String? body,
+    Value<String?> transportData = const Value.absent(),
     String? format,
     DateTime? createdAt,
     int? sequence,
@@ -789,6 +879,9 @@ class Message extends DataClass implements Insertable<Message> {
     conversationId: conversationId ?? this.conversationId,
     role: role ?? this.role,
     body: body ?? this.body,
+    transportData: transportData.present
+        ? transportData.value
+        : this.transportData,
     format: format ?? this.format,
     createdAt: createdAt ?? this.createdAt,
     sequence: sequence ?? this.sequence,
@@ -802,6 +895,9 @@ class Message extends DataClass implements Insertable<Message> {
           : this.conversationId,
       role: data.role.present ? data.role.value : this.role,
       body: data.body.present ? data.body.value : this.body,
+      transportData: data.transportData.present
+          ? data.transportData.value
+          : this.transportData,
       format: data.format.present ? data.format.value : this.format,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       sequence: data.sequence.present ? data.sequence.value : this.sequence,
@@ -816,6 +912,7 @@ class Message extends DataClass implements Insertable<Message> {
           ..write('conversationId: $conversationId, ')
           ..write('role: $role, ')
           ..write('body: $body, ')
+          ..write('transportData: $transportData, ')
           ..write('format: $format, ')
           ..write('createdAt: $createdAt, ')
           ..write('sequence: $sequence, ')
@@ -830,6 +927,7 @@ class Message extends DataClass implements Insertable<Message> {
     conversationId,
     role,
     body,
+    transportData,
     format,
     createdAt,
     sequence,
@@ -843,6 +941,7 @@ class Message extends DataClass implements Insertable<Message> {
           other.conversationId == this.conversationId &&
           other.role == this.role &&
           other.body == this.body &&
+          other.transportData == this.transportData &&
           other.format == this.format &&
           other.createdAt == this.createdAt &&
           other.sequence == this.sequence &&
@@ -854,6 +953,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
   final Value<String> conversationId;
   final Value<String> role;
   final Value<String> body;
+  final Value<String?> transportData;
   final Value<String> format;
   final Value<DateTime> createdAt;
   final Value<int> sequence;
@@ -864,6 +964,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
     this.conversationId = const Value.absent(),
     this.role = const Value.absent(),
     this.body = const Value.absent(),
+    this.transportData = const Value.absent(),
     this.format = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.sequence = const Value.absent(),
@@ -875,6 +976,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
     required String conversationId,
     required String role,
     required String body,
+    this.transportData = const Value.absent(),
     required String format,
     required DateTime createdAt,
     required int sequence,
@@ -893,6 +995,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
     Expression<String>? conversationId,
     Expression<String>? role,
     Expression<String>? body,
+    Expression<String>? transportData,
     Expression<String>? format,
     Expression<DateTime>? createdAt,
     Expression<int>? sequence,
@@ -904,6 +1007,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
       if (conversationId != null) 'conversation_id': conversationId,
       if (role != null) 'role': role,
       if (body != null) 'body': body,
+      if (transportData != null) 'transport_data': transportData,
       if (format != null) 'format': format,
       if (createdAt != null) 'created_at': createdAt,
       if (sequence != null) 'sequence': sequence,
@@ -917,6 +1021,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
     Value<String>? conversationId,
     Value<String>? role,
     Value<String>? body,
+    Value<String?>? transportData,
     Value<String>? format,
     Value<DateTime>? createdAt,
     Value<int>? sequence,
@@ -928,6 +1033,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
       conversationId: conversationId ?? this.conversationId,
       role: role ?? this.role,
       body: body ?? this.body,
+      transportData: transportData ?? this.transportData,
       format: format ?? this.format,
       createdAt: createdAt ?? this.createdAt,
       sequence: sequence ?? this.sequence,
@@ -950,6 +1056,9 @@ class MessagesCompanion extends UpdateCompanion<Message> {
     }
     if (body.present) {
       map['body'] = Variable<String>(body.value);
+    }
+    if (transportData.present) {
+      map['transport_data'] = Variable<String>(transportData.value);
     }
     if (format.present) {
       map['format'] = Variable<String>(format.value);
@@ -976,6 +1085,7 @@ class MessagesCompanion extends UpdateCompanion<Message> {
           ..write('conversationId: $conversationId, ')
           ..write('role: $role, ')
           ..write('body: $body, ')
+          ..write('transportData: $transportData, ')
           ..write('format: $format, ')
           ..write('createdAt: $createdAt, ')
           ..write('sequence: $sequence, ')
@@ -1431,6 +1541,7 @@ typedef $$ConversationsTableCreateCompanionBuilder =
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<String> lastMessagePreview,
+      Value<String?> remoteState,
       Value<bool> isPinned,
       Value<bool> isArchived,
       Value<int> rowid,
@@ -1442,6 +1553,7 @@ typedef $$ConversationsTableUpdateCompanionBuilder =
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<String> lastMessagePreview,
+      Value<String?> remoteState,
       Value<bool> isPinned,
       Value<bool> isArchived,
       Value<int> rowid,
@@ -1509,6 +1621,11 @@ class $$ConversationsTableFilterComposer
 
   ColumnFilters<String> get lastMessagePreview => $composableBuilder(
     column: $table.lastMessagePreview,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteState => $composableBuilder(
+    column: $table.remoteState,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1582,6 +1699,11 @@ class $$ConversationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get remoteState => $composableBuilder(
+    column: $table.remoteState,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get isPinned => $composableBuilder(
     column: $table.isPinned,
     builder: (column) => ColumnOrderings(column),
@@ -1616,6 +1738,11 @@ class $$ConversationsTableAnnotationComposer
 
   GeneratedColumn<String> get lastMessagePreview => $composableBuilder(
     column: $table.lastMessagePreview,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get remoteState => $composableBuilder(
+    column: $table.remoteState,
     builder: (column) => column,
   );
 
@@ -1686,6 +1813,7 @@ class $$ConversationsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<String> lastMessagePreview = const Value.absent(),
+                Value<String?> remoteState = const Value.absent(),
                 Value<bool> isPinned = const Value.absent(),
                 Value<bool> isArchived = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -1695,6 +1823,7 @@ class $$ConversationsTableTableManager
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 lastMessagePreview: lastMessagePreview,
+                remoteState: remoteState,
                 isPinned: isPinned,
                 isArchived: isArchived,
                 rowid: rowid,
@@ -1706,6 +1835,7 @@ class $$ConversationsTableTableManager
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<String> lastMessagePreview = const Value.absent(),
+                Value<String?> remoteState = const Value.absent(),
                 Value<bool> isPinned = const Value.absent(),
                 Value<bool> isArchived = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -1715,6 +1845,7 @@ class $$ConversationsTableTableManager
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 lastMessagePreview: lastMessagePreview,
+                remoteState: remoteState,
                 isPinned: isPinned,
                 isArchived: isArchived,
                 rowid: rowid,
@@ -1783,6 +1914,7 @@ typedef $$MessagesTableCreateCompanionBuilder =
       required String conversationId,
       required String role,
       required String body,
+      Value<String?> transportData,
       required String format,
       required DateTime createdAt,
       required int sequence,
@@ -1795,6 +1927,7 @@ typedef $$MessagesTableUpdateCompanionBuilder =
       Value<String> conversationId,
       Value<String> role,
       Value<String> body,
+      Value<String?> transportData,
       Value<String> format,
       Value<DateTime> createdAt,
       Value<int> sequence,
@@ -1847,6 +1980,11 @@ class $$MessagesTableFilterComposer
 
   ColumnFilters<String> get body => $composableBuilder(
     column: $table.body,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get transportData => $composableBuilder(
+    column: $table.transportData,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1918,6 +2056,11 @@ class $$MessagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get transportData => $composableBuilder(
+    column: $table.transportData,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get format => $composableBuilder(
     column: $table.format,
     builder: (column) => ColumnOrderings(column),
@@ -1979,6 +2122,11 @@ class $$MessagesTableAnnotationComposer
 
   GeneratedColumn<String> get body =>
       $composableBuilder(column: $table.body, builder: (column) => column);
+
+  GeneratedColumn<String> get transportData => $composableBuilder(
+    column: $table.transportData,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get format =>
       $composableBuilder(column: $table.format, builder: (column) => column);
@@ -2048,6 +2196,7 @@ class $$MessagesTableTableManager
                 Value<String> conversationId = const Value.absent(),
                 Value<String> role = const Value.absent(),
                 Value<String> body = const Value.absent(),
+                Value<String?> transportData = const Value.absent(),
                 Value<String> format = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> sequence = const Value.absent(),
@@ -2058,6 +2207,7 @@ class $$MessagesTableTableManager
                 conversationId: conversationId,
                 role: role,
                 body: body,
+                transportData: transportData,
                 format: format,
                 createdAt: createdAt,
                 sequence: sequence,
@@ -2070,6 +2220,7 @@ class $$MessagesTableTableManager
                 required String conversationId,
                 required String role,
                 required String body,
+                Value<String?> transportData = const Value.absent(),
                 required String format,
                 required DateTime createdAt,
                 required int sequence,
@@ -2080,6 +2231,7 @@ class $$MessagesTableTableManager
                 conversationId: conversationId,
                 role: role,
                 body: body,
+                transportData: transportData,
                 format: format,
                 createdAt: createdAt,
                 sequence: sequence,
