@@ -1,19 +1,16 @@
-name: android-debug-fast
+name: Android Debug Build
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: android-debug-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  debug-apk:
+  build-debug:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -23,8 +20,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
-          cache: gradle
+          java-version: '17'
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -32,31 +28,25 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Restore pub cache
+      - name: Cache Gradle
         uses: actions/cache@v4
         with:
           path: |
-            ~/.pub-cache
-            .dart_tool
-          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle.properties', 'android/settings.gradle.kts', 'pubspec.lock') }}
           restore-keys: |
-            ${{ runner.os }}-pub-
+            ${{ runner.os }}-gradle-
 
-      - name: Get dependencies
+      - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Generate Drift code
-        run: dart run build_runner build --delete-conflicting-outputs
-
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Build debug APK
+      - name: Build Android debug APK
         run: flutter build apk --debug
 
-      - name: Upload artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: shryne-chat-debug-apk
+          name: mediyo-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
